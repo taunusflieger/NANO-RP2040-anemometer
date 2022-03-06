@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+# FreeCAD backup
+*.FCStd1
+
