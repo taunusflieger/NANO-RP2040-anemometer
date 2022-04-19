@@ -20,10 +20,11 @@ Adafruit_GPS GPS(&GPSSerial);
 #define GPSECHO false
 
 uint32_t timer = millis();
-File dataFile;
 
 void setup()
 {
+  File dataFile;
+  
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(LED_BUILTIN, OUTPUT);
 
@@ -44,20 +45,25 @@ void setup()
   }
   delay(100);
   Serial.println("card initialized.");
-/*
-  // open the file. note that only one file can be open at a time,
-  // so you have to close this one before opening another.
+
+
+  Serial.println("Creating / opening datalog.txt");
   dataFile = SD.open("datalog.txt", FILE_WRITE);
   // if the file is available, seek to last position
   if (dataFile) {
     dataFile.seek(dataFile.size());
-  }
+    dataFile.println("============================================");
+    dataFile.println("Anemometer Calibration Tool v0.1");
+    dataFile.println("============================================");
+    dataFile.flush();
+    dataFile.close();
+ }
   // if the file isn't open, pop up an error:
   else {
     Serial.println("error opening datalog.txt");
   }
 
-*/
+
   // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
   GPS.begin(9600);
   // uncomment this line to turn on RMC (recommended minimum) and GGA (fix data) including altitude
@@ -85,7 +91,8 @@ void setup()
 
 void loop() // run over and over again
 {
-  String datasetNMEA = "";
+  File dataFile;
+  String datasetNMEA;
   int led_state = LOW;
   
   // read data from the GPS in the 'main loop'
@@ -98,10 +105,28 @@ void loop() // run over and over again
     // a tricky thing here is if we print the NMEA sentence, or data
     // we end up not listening and catching other sentences!
     // so be very wary if using OUTPUT_ALLDATA and trying to print out data
-    datasetNMEA += GPS.lastNMEA();
+    datasetNMEA = GPS.lastNMEA();
     Serial.print(datasetNMEA); // this also sets the newNMEAreceived() flag to false
-    if (!GPS.parse(GPS.lastNMEA())) // this also sets the newNMEAreceived() flag to false
+
+    dataFile = SD.open("datalog1.txt", FILE_WRITE);
+    // if the file is available, seek to last position
+    if (dataFile) {
+      // append data to existing file
+      dataFile.seek(dataFile.size());
+      dataFile.println(datasetNMEA);
+      dataFile.flush();
+      dataFile.close();  
+    } 
+    else {
+      // if the file isn't open, pop up an error:
+       Serial.println("error opening datalog.txt");
+    }
+
+    
+    if (!GPS.parse(GPS.lastNMEA())) { // this also sets the newNMEAreceived() flag to false
+      Serial.println("Parse failed");
       return; // we can fail to parse a sentence in which case we should just wait for another
+    }
   }
 
   digitalWrite(LED_BUILTIN, led_state);   
@@ -143,17 +168,8 @@ void loop() // run over and over again
       Serial.print("Altitude: "); Serial.println(GPS.altitude);
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
 
-  /*      
-      // if the file is available, write to it:
-      if (dataFile) {
-        dataFile.println(datasetNMEA);
-        dataFile.flush();
-      }
-      // if the file isn't open, pop up an error:
-      else {
-        Serial.println("error opening datalog.txt");
-      }
-*/
+      
+
     }
   }
 }
