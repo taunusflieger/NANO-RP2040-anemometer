@@ -18,8 +18,10 @@ Adafruit_GPS GPS(&GPSSerial);
 // Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
 // Set to 'true' if you want to debug and listen to the raw GPS sentences
 #define GPSECHO false
+#define SENTENCE_BUFFER_SIZE 2000
 
 uint32_t timer = millis();
+int buf_pos = 0;
 
 void setup()
 {
@@ -92,7 +94,10 @@ void setup()
 void loop() // run over and over again
 {
   File dataFile;
-  String datasetNMEA;
+  char datasetNMEA[SENTENCE_BUFFER_SIZE];
+  char line_buffer[100];
+  int line_len;
+  const int max_sentence = 20;
   int led_state = LOW;
   
   // read data from the GPS in the 'main loop'
@@ -100,37 +105,48 @@ void loop() // run over and over again
   // if you want to debug, this is a good time to do it!
   if (GPSECHO)
     if (c) Serial.print(c);
+  
   // if a sentence is received, we can check the checksum, parse it...
   if (GPS.newNMEAreceived()) {
-    // a tricky thing here is if we print the NMEA sentence, or data
-    // we end up not listening and catching other sentences!
-    // so be very wary if using OUTPUT_ALLDATA and trying to print out data
-    datasetNMEA = GPS.lastNMEA();
-    Serial.print(datasetNMEA); // this also sets the newNMEAreceived() flag to false
-
-    dataFile = SD.open("datalog1.txt", FILE_WRITE);
-    // if the file is available, seek to last position
-    if (dataFile) {
-      // append data to existing file
-      dataFile.seek(dataFile.size());
-      dataFile.println(datasetNMEA);
-      dataFile.flush();
-      dataFile.close();  
-    } 
-    else {
-      // if the file isn't open, pop up an error:
-       Serial.println("error opening datalog.txt");
-    }
-
-    
     if (!GPS.parse(GPS.lastNMEA())) { // this also sets the newNMEAreceived() flag to false
       Serial.println("Parse failed");
       return; // we can fail to parse a sentence in which case we should just wait for another
     }
+ 
+
+    // a tricky thing here is if we print the NMEA sentence, or data
+    // we end up not listening and catching other sentences!
+    // so be very wary if using OUTPUT_ALLDATA and trying to print out data
+    if (buf_pos + 100 >= SENTENCE_BUFFER_SIZE) {
+      buf_pos = 0;
+      dataFile = SD.open("datalog1.txt", FILE_WRITE);
+      // if the file is available, seek to last position
+      if (dataFile) {
+        // append data to existing file
+        dataFile.seek(dataFile.size());
+        dataFile.print(datasetNMEA);
+        dataFile.flush();
+        dataFile.close();
+      }
+      else {
+        // if the file isn't open, pop up an error:
+         Serial.println("error opening datalog.txt");
+      }
+
+   }
+
+
+    strcpy(line_buffer, GPS.lastNMEA());
+    line_len = strlen(line_buffer);
+    strcpy(&datasetNMEA[buf_pos], line_buffer);
+    buf_pos += line_len;
+
+    Serial.print(line_buffer);
+
   }
 
-  digitalWrite(LED_BUILTIN, led_state);   
-  
+  digitalWrite(LED_BUILTIN, led_state);
+
   // approximately every 2 seconds or so, print out the current stats
   if (millis() - timer > 2000) {
     if (led_state == HIGH)
@@ -167,9 +183,6 @@ void loop() // run over and over again
       Serial.print("Angle: "); Serial.println(GPS.angle);
       Serial.print("Altitude: "); Serial.println(GPS.altitude);
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
-
-      
-
     }
   }
 }
